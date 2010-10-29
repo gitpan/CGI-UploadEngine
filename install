@@ -1,0 +1,206 @@
+#!/usr/bin/perl
+
+our @perl_switches;
+our @catalyst;
+open( STDERR, '>', '/tmp/uploadengine-install.tmp' );
+start();
+
+# Get apache root 
+my ( $root_dir, $html_dir, $cgi_dir ) = parse_conf( apache_conf() );
+$root_dir = ask_user( "Your root apache directory", $root_dir );
+
+# Get domain name
+my ( $domain ) = get_domain();
+$domain = ask_user( "Your server domain", $domain );
+
+# Install config file
+my $config_file = $root_dir . '.uploadengine';
+if ( -e $root_dir . '.uploadengine' ) { 
+	print "\nI found an existing config file:\n  $config_file \n\n"; 
+	my $result = ask_user( "Replace the existing file", 'n' );
+	if ( $result =~ m/y/i ) { remove_config( $config_file); install_config( $config_file ); }
+}
+else                                  { install_config( $config_file ); }
+
+# Install cgi sample files
+my $result = ask_user( "Install the CGI samples", 'n' );
+if ( $result =~ m/y/i ) { install_cgi( ask_user( "Your cgi-bin directory", $cgi_dir ), $html_dir ); }
+
+# Ask about possible catalyst directories
+foreach my $switch ( @perl_switches ) {
+	if ( $switch =~ m#/(\w+)/lib# ) { 
+		my $project = $1; 
+		my $result  = ask_user( "Attempt to install catalyst '$switch'", 'n' );
+		if ( $result =~ m/y/i ) {
+			install_catalyst( $switch );
+		}
+	}
+}
+
+close( STDERR );
+
+exit;
+
+
+
+
+sub ask_user {
+	my ( $question, $default, $response ) = @_;
+	print "$question [$default]:";
+	chomp( $response = <> ); 
+	if (! $response ) { $response = $default; }
+	return $response;
+}
+
+sub apache_conf {
+	my $cmd     = 'find / httpd | grep "httpd.conf$"';
+	my @results = split( /\n/, `$cmd` );
+	my $apache_conf;
+
+	foreach my $result ( @results ) {
+		if ( $result =~ m#home# ) { 
+			next;
+		} else {
+			if ( $result =~ m/httpd\.conf$/ ) { 
+				$apache_conf = $result; 
+			}
+		}
+	}
+
+	if ( $apache_conf ) { print "\nI think I found your apache configuration file:\n  $apache_conf \n\n"; }
+	else                { print "\nI could not find your apache configuration file.\n\n"; }
+
+	return $apache_conf
+}
+
+sub parse_conf {
+	my $text  = get_file_text( @_ );
+	my @lines = split( /\n/, $text );
+
+	my ( $html_dir, $cgi_dir );
+	foreach my $line ( @lines ) {
+		if ( $line =~ m/^#/ ) {
+			next;
+		} else {
+			if    ( $line =~ m/Directory/ ) {
+				if    ( $line =~ m#^[^/]*([-/\w]+html)# )    { $html_dir = $1; }
+				elsif ( $line =~ m#^[^/]*([-/\w]+cgi-bin)# ) { $cgi_dir  = $1; }
+			} 
+			elsif ( $line =~ m#PerlSwitches -I(.*)# ) { 
+				push @perl_switches, $1;
+			}
+		}
+	}
+
+	return root_dir( $html_dir, $cgi_dir ), $html_dir, $cgi_dir;
+}
+
+sub root_dir {
+	my ( $html, $cgi, $dir ) = @_;
+	if ( $cgi =~ m#^(.*)cgi-bin# ) { $dir = $1; }
+	if ( $html =~ m#^$dir# )       { return $dir; }
+	else                           { return '';   }
+}
+
+sub get_file_text {
+	my ( $file, $lines ) = @_;
+	if ( -s $file ) {
+		open( INFILE, '<', $file );
+		while ( my $line = <INFILE> ) { $lines .= $line; }
+		close( INFILE );
+	} else {
+		print "FILE NOT FOUND: $file \n";
+		exit;
+	}
+	return $lines;
+}
+
+sub start {
+	print "\nCGI::UploadEngine Install Script (c) 2010 Roger Hall\n\n";
+	print "I will help you do the following tasks:\n";
+	print "   1. Install the runtime config file in apache root directory\n";
+	print "   2. Ask you to optionally install the CGI files\n";
+	print "      A. Create a tmpl directory in the apache root directory\n";
+	print "      B. Install the tmpl files\n";
+	print "      C. Install the CGI files and libraries\n";
+	print "   3. Ask you to optionally install catalyst Controllers\n";
+	print "      A. Install the tmpl files\n";
+	print "      B. Install the Controller modules \n";
+	print "   4. Create and initialize 'files' database \n";
+	print "      Note: you will need to enter your password, but it will \n";
+	print "      not be saved or transmitted.\n";
+	print "   2. directory\n";
+}
+
+sub install_config {
+	my ( $file ) = @_; 
+	my $cmd = "cp uploadengine $file";
+	my $result = `$cmd`; 
+	if ( $result ) { print "\nERROR: $result\n"; }
+	else           { print "\nI installed the configuration file:\n  $file\n\n"; }
+	return $result;
+}
+
+sub remove_config {
+	my ( $file ) = @_; 
+	my $cmd = "rm -f $file";
+	my $result = `$cmd`; 
+	if ( $result ) { print "\nERROR: $result\n"; }
+	else           { print "\nI removed the configuration file:\n  $file\n"; }
+	return $result;
+}
+
+sub install_cgi {
+	my ( $cgi_dir, $html_dir ) = @_; 
+	
+	my $images_dir = ask_user( 'Image directory', $html_dir . '/images' );
+
+	print "\n";
+	copy_file( 'cgi-bin/upload_cfg.pl', $cgi_dir );
+	copy_file( 'cgi-bin/upload_html.pl', $cgi_dir );
+	copy_file( 'cgi-bin/form_eg.cgi', $cgi_dir );
+	copy_file( 'cgi-bin/handler_eg.cgi', $cgi_dir );
+	copy_file( 'images/alert.jpg', $images_dir );
+	copy_file( 'images/checked.jpg', $images_dir );
+	print "\n";
+
+	return $result;
+}
+
+sub copy_file {
+	my ( $file, $dir ) = @_;
+	my $cmd = "cp $file $dir";
+	print "     CMD: $cmd\n";
+	my $result = `$cmd`; 
+	if ( $result ) { print "\nERROR: $result\n"; }
+}
+
+sub install_config {
+	my ( $file ) = @_; 
+	my $cmd = "cp uploadengine $file";
+	my $result = `$cmd`; 
+	if ( $result ) { print "\nERROR: $result\n"; }
+	else           { print "\nI installed the configuration file:\n  $file\n\n"; }
+	return $result;
+}
+
+sub copy_file {
+	my ( $file, $dir ) = @_;
+	my $cmd = "cp $file $dir";
+	my $result = `$cmd`; 
+	if ( $result ) { print "\nERROR: $result\n"; }
+	else           { print "I copied the file $file to $dir.\n"; }
+}
+
+
+sub install_catalyst {
+	my ( $switch ) = @_; 
+	my $cmd = "cp uploadengine $file";
+	my $result = `$cmd`; 
+	if ( $result ) { print "\nERROR: $result\n"; }
+	else           { print "\nI installed the configuration file:\n  $file\n\n"; }
+	return $result;
+}
+
+sub get_domain { my $domain = `uname -n`; chomp( $domain); return $domain; }
+
