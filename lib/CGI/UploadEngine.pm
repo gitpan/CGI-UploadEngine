@@ -8,7 +8,7 @@ use warnings;
 use strict;
 use Carp;
 
-use version; our $VERSION = qv('0.9.1');
+use version; our $VERSION = qv('0.9.2');
 
 our $token_length = 60;
 our @token_chars  = ('a'..'z','A'..'Z','0'..'9','_');
@@ -208,7 +208,7 @@ CGI::UploadEngine - File Upload Engine for Multi-App Web Server
 
 =head1 VERSION
 
-This document describes CGI::UploadEngine version 0.9.1
+This document describes CGI::UploadEngine version 0.9.2
 
 
 =head1 DESCRIPTION
@@ -536,19 +536,104 @@ anchor to replace the elements with the success token.
 
 =head1 DIAGNOSTICS
 
-There are several, but they will not be described in the initial release.
-
-
 =over
 
-=item C<< Error message here, perhaps with %s placeholders >>
+These errors are meant to appear on the upload page if an upload was not successful. If you get one of these as an exception, then it was not caught correctly.
 
-[Description of error here]
+=item C<<"ERROR: Failed to copy '%s1' to '%s2': %s3">>
 
-=item C<< Another error message here >>
+This error occurs when the uploaded file could not be copied. It is most likely a file system issue.
 
-[Description of error here]
+%s1 - file name
+%s2 - target location
+%s3 - error string
 
+=item C<<"ERROR: file size $file_size is smaller than min size $min_size">>
+
+The size of the file that was to be uploaded was smaller than the minimum size set in the configuration file or passed to IOSea::Upload::upload_prepare.
+
+=item C<<"ERROR: file size $file_size is larger than max size $max_size">>
+
+The size of the file that was to be uploaded was larger than the minimum size set in the configuration file or passed to IOSea::Upload::upload_prepare.
+
+=item C<<"ERROR: file type $type not allowed. Allowed types are: $allowed_types">>
+
+The type of the file that was to be uploaded was not listed in the allowed types set in the configuration file or passed to IOSea::Upload::upload_prepare.
+
+=item C<<"ERROR: file type $type is forbidden. Forbidden types are: $disallowed_types">>
+
+The type of the file that was to be uploaded was listed in the forbidden types set in the configuration file or passed to IOSea::Upload::upload_prepare.
+
+=item C<<"ERROR: request upload failed">>
+
+The catalyst request failed
+
+
+
+
+=item C<<"could not determine db name from arguments">>
+
+The database name was not in the parameter hash used to initialize an IOSea::Upload object or in the config file.
+
+=item C<<"could not determine host from arguments">>
+
+The host was not in the parameter hash used to initialize an IOSea::Upload object or in the config file.
+
+=item C<<"could not determine user from arguments">>
+
+The user was not in the parameter hash used to initialize an IOSea::Upload object or in the config file.
+
+=item C<<"could not determine pass from arguments">>
+
+The password was not in the parameter hash used to initialize an IOSea::Upload object or in the config file.
+
+=item C<<"no file_path could be determined for upload_prepare">>
+
+The file path was not in the parameter hash passed to IOSea::Upload::upload_prepare or in the config file.
+
+=item C<<"no max_size could be determined for upload_prepare">>
+
+The max size was not in the parameter hash passed to IOSea::Upload::upload_prepare or in the config file.
+
+=item C<<"no min_size could be determined for upload_prepare">>
+
+The min size was not in the parameter hash passed to IOSea::Upload::upload_prepare or in the config file.
+
+=item C<<"failed to write file parameters to database">>
+
+The SQL call to insert file parameters into the database failed.
+
+=item C<<"ERROR: failed to exec sql statement">>
+
+An SQL call failed or returned no results.
+
+=item C<<"ERROR: file_path is blank">>
+
+The file path retrieved from the database in IOSea::Upload::upload_validate was blank.
+
+=item C<<"ERROR: max_size is blank">>
+
+The max size retrieved from the database in IOSea::Upload::upload_validate was blank.
+
+=item C<<"ERROR: min_size is blank">>
+
+The min size retrieved from the database in IOSea::Upload::upload_validate was blank.
+
+=item C<<"ERROR: created is blank">>
+
+The created field retrieved from the database in IOSea::Upload::upload_validate was blank.
+
+=item C<<"ERROR: success_token already exists for attempt_token: $attempt_token">>
+
+In IOSea::Upload::upload_success, there is already a success token corresponding to the current attempt token. This indicates that this is a duplicate attempt at uploading. Possibly caused by dubiously altered HTML code.
+
+=item C<<"could not determine root_url from config hash">>
+
+In IOSea::Upload::_generate_html, the root url was not in the config hash. Likely because it was not correctly specified in the config file.
+
+=item C<<"config hash not defined in _generate_html()">>
+
+In IOSea::Upload::_generate_html, the config hash was not set. This is likely because it is missing, incorrectly formatted, or the path to it is wrong in the controller Upload.pm or UploadEG.pm
 =back
 
 

@@ -1,4 +1,4 @@
-CGI-UploadEngine version 0.9.1
+CGI-UploadEngine version 0.9.2
 
 CGI::UploadEngine allows server administrators to easily enable file upload for 
 any perl application or developer. The upload "engine" has a simple API that not 
@@ -8,14 +8,8 @@ file type, size, and destination directory.
 
 INSTALLATION
 
-To install this module, run the following commands:
 
-	perl Makefile.PL
-	make install clean
-	rm -f Makefile.old
-	perl t/00.load.t
-
-To install the software, read the CGI::UE perldoc.
+To install the software, read the CGI::UploadEngine perldoc.
 
 DEPENDENCIES
 

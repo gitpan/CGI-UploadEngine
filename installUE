@@ -1,33 +1,86 @@
 #!/usr/bin/perl
 
-our @perl_switches;
-our @catalyst;
+=pod
+UE_APACHE_ROOT=/var/www;                                     export UE_APACHE_ROOT;
+UE_CGI_DIR=$APACHE_ROOT/cgi-bin;                             export UE_CGI_DIR;
+UE_IMAGE_DIR=$APACHE_ROOT/html/images;                       export UE_IMAGE_DIR;
+UE_EXT_PATH=$APACHE_ROOT/html/js/ext-core/ext-core-debug.js; export UE_EXT_PATH;
+
+UE_CAT_PROJ=MBC;                                             export UE_DOMAIN;
+UE_CONTROLLER_DIR=/var/www/catalyst/MBC/lib/MBC/Controller;  export UE_CONTROLLER_DIR;
+UE_TMPL_DIR=/var/www/catalyst/MBC/root/src;                  export UE_TMPL_DIR;
+
+UE_DOMAIN=bioinformatics.ualr.edu;                           export UE_DOMAIN;
+UE_ROOT_URL=http://$UE_DOMAIN/catalyst;                      export UE_ROOT_URL;
+UE_EXT_URL=http://$UE_DOMAIN/js/ext-core/ext-core-debug.js;  export UE_EXT_URL;
+=cut
+
+use IO::Pipe; #used to safely run external commands
+
+our ( @perl_switches, @catalyst, $domain );
+
+# Redirect warnings and errors
 open( STDERR, '>', '/tmp/uploadengine-install.tmp' );
+
 start();
 
-# Get apache root 
+# Attempt to automagically find dirs from httpd.conf
 my ( $root_dir, $html_dir, $cgi_dir ) = parse_conf( apache_conf() );
-$root_dir = ask_user( "Your root apache directory", $root_dir );
 
-# Get domain name
-my ( $domain ) = get_domain();
-$domain = ask_user( "Your server domain", $domain );
+#if that didn't work, then ask the user
+if(not defined $root_dir){
+	# Get apache root 
+	$root_dir = ask_user( "What is your root apache directory?", $root_dir );
+}
+if(not defined $domain){
+	# Get domain name
+	$domain = ask_user( "Please enter your server domain", get_domain() );
+}
 
 # Install config file
 my $config_file = $root_dir . '.uploadengine';
 if ( -e $root_dir . '.uploadengine' ) { 
 	print "\nI found an existing config file:\n  $config_file \n\n"; 
 	my $result = ask_user( "Replace the existing file", 'n' );
-	if ( $result =~ m/y/i ) { remove_config( $config_file); install_config( $config_file ); }
+	if ( $result =~ m/y/i ) { 
+		remove_config( $config_file); 
+		install_config( $config_file ); 
+	}
 }
-else                                  { install_config( $config_file ); }
+else{ 
+	install_config( $config_file ); 
+}
 
-# Install cgi sample files
-my $result = ask_user( "Install the CGI samples", 'n' );
-if ( $result =~ m/y/i ) { install_cgi( ask_user( "Your cgi-bin directory", $cgi_dir ), $html_dir ); }
+# Install CGI::UE
 
-# Ask about possible catalyst directories
+# Install mysql database
+
+# Install Core in at least one Catalyst Controller dir
 foreach my $switch ( @perl_switches ) {
+#upload.pm controller
+	if ( $switch =~ m#/(\w+)/lib# ) { 
+		my $project = $1; 
+		my $result  = ask_user( "Attempt to install catalyst '$switch'", 'n' );
+		if ( $result =~ m/y/i ) {
+			install_catalyst( $switch );
+		}
+	}
+}
+
+# Install Ext JavaScript files
+
+# Install CGI sample files
+if(not defined $cgi_dir){
+	$cgi_dir=ask_user( "Your cgi-bin directory", $cgi_dir );
+}
+my $result = ask_user( "Install the CGI samples", 'n' );
+if ( $result =~ m/y/i ){
+	install_cgi( $cgi_dir, $html_dir );
+}
+
+# Install Catalyst sample files
+foreach my $switch ( @perl_switches ) {
+#uploadEG
 	if ( $switch =~ m#/(\w+)/lib# ) { 
 		my $project = $1; 
 		my $result  = ask_user( "Attempt to install catalyst '$switch'", 'n' );
@@ -52,12 +105,27 @@ sub ask_user {
 	return $response;
 }
 
+
+sub get_apache_root {
+	my ( $root_dir, $html_dir, $cgi_dir ) = parse_conf( apache_conf() );
+	return ask_user( "Your root apache directory", $root_dir );
+}	
+	
+sub get_domain {
+	# Get domain name
+	my ( $domain ) = get_domain();
+	$domain = ask_user( "Your server domain", $domain );
+}	
+
 sub apache_conf {
+	my $InputFromCmdHandle=new IO::Pipe;
 	my $cmd     = 'find / httpd | grep "httpd.conf$"';
-	my @results = split( /\n/, `$cmd` );
+	open($InputFromCmdHandle,"-|",$cmd);
+	my @resultArray=<$InputFromCmdHandle>;
+	close($InputFromCmdHandle) or die("my child did not exit properly: $?");
 	my $apache_conf;
 
-	foreach my $result ( @results ) {
+	foreach my $result ( @resultArray ) {
 		if ( $result =~ m#home# ) { 
 			next;
 		} else {
@@ -92,10 +160,10 @@ sub parse_conf {
 		}
 	}
 
-	return root_dir( $html_dir, $cgi_dir ), $html_dir, $cgi_dir;
+	return get_root_dir( $html_dir, $cgi_dir ), $html_dir, $cgi_dir;
 }
 
-sub root_dir {
+sub get_root_dir {
 	my ( $html, $cgi, $dir ) = @_;
 	if ( $cgi =~ m#^(.*)cgi-bin# ) { $dir = $1; }
 	if ( $html =~ m#^$dir# )       { return $dir; }
@@ -134,8 +202,12 @@ sub start {
 
 sub install_config {
 	my ( $file ) = @_; 
+	my $InputFromCmdHandle=new IO::Pipe;
 	my $cmd = "cp uploadengine $file";
-	my $result = `$cmd`; 
+	open($InputFromCmdHandle,"-|",$cmd);
+	my @resultArray=<$InputFromCmdHandle>;
+	my $result = join("\n",@resultArray);
+	close($InputFromCmdHandle) or die("my child did not exit properly: $?");
 	if ( $result ) { print "\nERROR: $result\n"; }
 	else           { print "\nI installed the configuration file:\n  $file\n\n"; }
 	return $result;
@@ -143,8 +215,12 @@ sub install_config {
 
 sub remove_config {
 	my ( $file ) = @_; 
+	my $InputFromCmdHandle=new IO::Pipe;
 	my $cmd = "rm -f $file";
-	my $result = `$cmd`; 
+	open($InputFromCmdHandle,"-|",$cmd);
+	my @resultArray=<$InputFromCmdHandle>;
+	my $result = join("\n",@resultArray);
+	close($InputFromCmdHandle) or die("my child did not exit properly: $?");
 	if ( $result ) { print "\nERROR: $result\n"; }
 	else           { print "\nI removed the configuration file:\n  $file\n"; }
 	return $result;
@@ -169,38 +245,57 @@ sub install_cgi {
 
 sub copy_file {
 	my ( $file, $dir ) = @_;
+	my $InputFromCmdHandle=new IO::Pipe;
 	my $cmd = "cp $file $dir";
+	open($InputFromCmdHandle,"-|",$cmd);
+	my @resultArray=<$InputFromCmdHandle>;
+	my $result = join("\n",@resultArray);
+	close($InputFromCmdHandle) or die("my child did not exit properly: $?");
 	print "     CMD: $cmd\n";
-	my $result = `$cmd`; 
 	if ( $result ) { print "\nERROR: $result\n"; }
+	else           { print "I copied the file $file to $dir.\n"; }
 }
 
 sub install_config {
 	my ( $file ) = @_; 
+	my $InputFromCmdHandle=new IO::Pipe;
 	my $cmd = "cp uploadengine $file";
-	my $result = `$cmd`; 
+	open($InputFromCmdHandle,"-|",$cmd);
+	my @resultArray=<$InputFromCmdHandle>;
+	my $result = join("\n",@resultArray);
+	close($InputFromCmdHandle) or die("my child did not exit properly: $?");
 	if ( $result ) { print "\nERROR: $result\n"; }
 	else           { print "\nI installed the configuration file:\n  $file\n\n"; }
 	return $result;
-}
-
-sub copy_file {
-	my ( $file, $dir ) = @_;
-	my $cmd = "cp $file $dir";
-	my $result = `$cmd`; 
-	if ( $result ) { print "\nERROR: $result\n"; }
-	else           { print "I copied the file $file to $dir.\n"; }
 }
 
 
 sub install_catalyst {
 	my ( $switch ) = @_; 
+	my $InputFromCmdHandle=new IO::Pipe;
 	my $cmd = "cp uploadengine $file";
-	my $result = `$cmd`; 
+	open($InputFromCmdHandle,"-|",$cmd);
+	my @resultArray=<$InputFromCmdHandle>;
+	my $result = join("\n",@resultArray);
+	close($InputFromCmdHandle) or die("my child did not exit properly: $?");
 	if ( $result ) { print "\nERROR: $result\n"; }
 	else           { print "\nI installed the configuration file:\n  $file\n\n"; }
 	return $result;
 }
 
-sub get_domain { my $domain = `uname -n`; chomp( $domain); return $domain; }
+sub get_domain { 
+	my $InputFromCmdHandle=new IO::Pipe;
+	my $cmd="uname -n";
+	open($InputFromCmdHandle,"-|",$cmd);
+	my @resultArray=<$InputFromCmdHandle>;
+	chomp(@resultArray); 
+	#i'm shifting cuz there should only be one element
+	my $result = shift(@resultArray);
+	close($InputFromCmdHandle) or die("my child did not exit properly: $?");
+	return $result; 
+}
 
+
+__END__
+
+    
