@@ -8,7 +8,7 @@ use warnings;
 use strict;
 use Carp;
 
-use version; our $VERSION = qv('0.9.2');
+use version; our $VERSION = qv('0.9.3');
 
 our $token_length = 60;
 our @token_chars  = ('a'..'z','A'..'Z','0'..'9','_');
@@ -20,20 +20,46 @@ our $config_file  = '/var/www/.uploadengine';
         my %user_of    :ATTR( :get<user>     :set<user>     :default<''>          :init_arg<user> );
         my %pass_of    :ATTR( :get<pass>     :set<pass>     :default<''>          :init_arg<pass> );
         my %config_of  :ATTR( :get<config>   :set<config>   :default<''>          :init_arg<config> );
+        my %verbose_of :ATTR( :get<verbose>  :set<verbose>  :default<'0'>        );
 
-                
+        sub verbose { my ( $self ) = @_; return $self->get_verbose(); }
+
         sub START {
                 my ($self, $ident, $arg_ref) = @_;
 
 		# Loads the YAML configuration file
+		warn "CONFIG: $config_file";
 		my $config = LoadFile($config_file);
-		
+
+		# Set verbose
+		if ( $config->{verbose} ) { $self->set_verbose( 1 ); }
+
+		# Report config if verbose
+		if ( $self->verbose() ) { foreach my $key ( keys %$config ) { warn "CONFIG: $key -> " . $config->{$key}; } }
+
 		# Store the file descriptor in member variable
 		$self->set_config($config);
-		$dbh = DBConnect( database => $self->get_db(), 
-		                  host     => $self->get_host(), 
-				  user     => $self->get_user(), 
-				  pass     => $self->get_pass() );
+		
+		# Check to see if database info was passed
+		if ( $self->get_db() ne '' and $self->get_user() ne '' and $self->get_pass() ne '') {
+			$dbh = DBConnect( database => $self->get_db(), 
+					  host     => $self->get_host(), 
+					  user     => $self->get_user(), 
+					  pass     => $self->get_pass() );
+		# If not then use the database info from the config file
+		} else {
+			$dbh = DBConnect( database => $self->get_config()->{database},
+					  host     => $self->get_config()->{host}, 
+					  user     => $self->get_config()->{user}, 
+					  pass     => $self->get_config()->{pass} );
+	
+			# Set configured connection parameters
+			$self->set_db( $config->{database} );
+			$self->set_host( $config->{host} );
+			$self->set_user( $config->{user} );
+			$self->set_pass( $config->{pass} );
+		}
+
                 return;
         }
 
@@ -208,7 +234,7 @@ CGI::UploadEngine - File Upload Engine for Multi-App Web Server
 
 =head1 VERSION
 
-This document describes CGI::UploadEngine version 0.9.2
+This document describes CGI::UploadEngine version 0.9.3
 
 
 =head1 DESCRIPTION
@@ -876,7 +902,7 @@ L<http://rt.cpan.org>.
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyleft (c) 2010, Roger A Hall C<< <rogerhall@cpan.org> >>. All rights pre-served.
+Copyleft (c) 2011, Roger A Hall C<< <rogerhall@cpan.org> >>. All rights pre-served.
 
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself. See L<perlartistic>.

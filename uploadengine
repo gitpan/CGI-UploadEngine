@@ -1,9 +1,0 @@
----
-root_url: http://DOMAIN/
-ext_js_url: http://DOMAIN/js/ext-core/
-error_image: <img src="http://DOMAIN/images/alert.jpg">
-success_message: <img src="http://DOMAIN/images/checked.jpg"> File Uploaded
-database: files
-user: files
-pass: tmie
-

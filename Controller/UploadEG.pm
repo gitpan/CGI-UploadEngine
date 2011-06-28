@@ -1,7 +1,8 @@
 package MBC::Controller::UploadEG;
 use Moose;
 use namespace::autoclean;
-use IOSea::Upload;
+use CGI::UploadEngine;
+use YAML::Any qw(LoadFile);
 
 # Sets the actions in this controller to be registered with this prefix
 __PACKAGE__->config->{namespace} = 'upload';
@@ -31,41 +32,42 @@ Uses CGI::UE I<upload_retrieve()> to get info on a successful upload.
 =back
 
 =cut
+our $config_file = '/var/www/.uploadeg';
 
 sub form_eg : Local {
         my ( $self, $c ) = @_;
 
-	#TODO:read these from config file in the upload engine
-	my $upload = IOSea::Upload->new({ db => 'files', user => 'files', pass => 'tmie' });
-        
-	#parameters for file to be uploaded
-	my $max_size=5000000;
-	my $min_size=1;
-	#types of files explicitly allowed (whitelist). includes . in front of type
-	my $allowed_types=".ahk .exe";
-	#types of files explicitly NOT allowed (blacklist). includes . in front of type
-	my $disallowed_types=".htm .html";
+	# Get configuration
+	my $config = LoadFile($config_file);
 
-	$c->stash->{file_upload} = $upload->upload_prepare({ file_path => '/tmp',
-							     max_size => $max_size,
-							     min_size=>$min_size,
-							     allowed_types=>$allowed_types,
-							     disallowed_types=>$disallowed_types });
+	# Create engine
+        my $upload = CGI::UploadEngine->new();
 
-	$c->stash->{action_url}  = $c->config->{rootURL} . 'upload/handler_eg';
+	# Prepare upload 
+	$c->stash->{file_upload} = $upload->upload_prepare({ file_path        => $config->{file_path},
+							     max_size         => $config->{max_size},
+							     min_size         => $config->{min_size},
+							     allowed_types    => $config->{allowed_types},
+							     disallowed_types => $config->{disallowed_types} });
+
+	# Munge template
+	$c->stash->{action_url}  = $c->config->{root_url} . 'upload/handler_eg';
 	$c->stash->{template}    = 'upload/form_eg.tt2';
 }
 
 sub handler_eg : Local {
         my ( $self, $c ) = @_;
 
+	# Parse form data
 	my $token  = $c->request->param('token');
 	my $other  = $c->request->param('other');
 
-	my $upload = IOSea::Upload->new({ db => 'files', user => 'files', pass => 'tmie' });
+	# Retrieve file info with token
+        my $upload = CGI::UploadEngine->new();
 	my $file   = $upload->upload_retrieve({ token => $token });
 
-	$c->stash->{path_name}   = $file->{file_path} . '/' . $file->{file_name};
+	# Munge template
+	$c->stash->{path_name}   = $file->{file_path} . $file->{file_name};
 	$c->stash->{other}       = $other;
 	$c->stash->{template}    = 'upload/handler_eg.tt2';
 }
